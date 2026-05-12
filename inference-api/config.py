@@ -2,10 +2,10 @@ from pathlib import Path
 import torch
 
 _HERE           = Path(__file__).parent
-_MT             = _HERE.parent / "model-training"
+_ROOT           = _HERE.parent
 
-DATA_DIR        = _MT / "data" / "raw"
-CHECKPOINT_DIR  = _MT / "outputs" / "checkpoints"
+DATA_DIR        = _ROOT / "data" / "raw"
+CHECKPOINT_DIR  = _ROOT / "model-training" / "outputs" / "checkpoints"
 
 IMG_SIZE        = 224
 BATCH_SIZE      = 32

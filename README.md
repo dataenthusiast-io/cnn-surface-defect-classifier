@@ -8,12 +8,28 @@
 
 ```
 cnn-project/
-├── model-training/      PyTorch training pipeline (ResNet-18, 6-class)
-├── inference-api/       FastAPI inference service
-└── inference-cockpit/   Next.js 16 dark-mode inspection cockpit
+├── data/                    Shared dataset root — git-ignored (only .gitkeep tracked)
+│   └── raw/<class>/         1 800 images, 300 per class — populated by download script
+├── model-training/          PyTorch training pipeline (ResNet-18, 6-class)
+│   ├── src/                 dataset · model · train · evaluate · predict
+│   ├── scripts/             download_data.py
+│   ├── outputs/             checkpoints · logs · plots — git-ignored
+│   ├── config.py
+│   └── requirements.txt
+├── inference-api/           FastAPI inference service — self-contained Python package
+│   ├── api/                 main.py · pipeline.py
+│   ├── src/                 model · dataset (inference-only copies)
+│   ├── config.py
+│   └── requirements.txt
+└── inference-cockpit/       Next.js 16 dark-mode inspection cockpit
+    ├── app/                 Next.js App Router pages
+    ├── lib/                 api client · components · utils
+    └── types/               TypeScript types
 ```
 
-`inference-api` reads `model-training/outputs/checkpoints/best_model.pth` and shares the same Python environment as training.
+**Data flow:**
+- `data/raw/` is written once by `model-training/scripts/download_data.py` and read by both `model-training` and `inference-api` — neither component owns the folder.
+- The trained checkpoint (`model-training/outputs/checkpoints/best_model.pth`) is the deployment artifact consumed by `inference-api`.
 
 ---
 
@@ -21,11 +37,11 @@ cnn-project/
 
 | Tool | Notes |
 |---|---|
-| Python 3.11+ | `model-training/.venv` |
+| Python 3.11+ | `model-training/.venv` and `inference-api/.venv` — each component has its own |
 | Node.js 18+ | for the cockpit |
 | `~/.kaggle/kaggle.json` | only needed on a machine that has never downloaded this dataset |
 
-**Dataset is not in the repo** — `model-training/data/` and `model-training/outputs/` are git-ignored. Run the download script once before training.
+**Dataset is not in the repo** — `data/` and `model-training/outputs/` are git-ignored. Run the download script once before training.
 
 `kagglehub` caches downloads in `~/.cache/kagglehub/`. If the dataset is already cached on your machine, the script works without credentials. Credentials are only required on a fresh machine doing a first-time download.
 
@@ -41,10 +57,18 @@ cnn-project/
 
 ## Quick Start
 
-### 1 · Python environment
+### 1 · Python environments
+
+Each component has its own isolated venv:
 
 ```bash
+# Training
 cd model-training
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# Inference API
+cd ../inference-api
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -89,8 +113,8 @@ then merges the Kaggle `train/` + `validation/` splits into `data/raw/<class>/` 
 ### 5 · Inference API
 
 ```bash
-cd ../inference-api
-../model-training/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+cd inference-api
+.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 # http://127.0.0.1:8000/health
 ```
 
@@ -255,10 +279,9 @@ model-training/
 │   ├── evaluate.py     Metrics + 6×6 confusion matrix + plots
 │   └── predict.py      Single-image CLI inference
 ├── scripts/
-│   └── download_data.py   kagglehub download + merge train+val splits
-├── data/raw/           1 800 images — git-ignored, download via script
+│   └── download_data.py   kagglehub download + merge train+val splits → data/raw/
 ├── outputs/            checkpoints + logs + plots — git-ignored
-├── config.py           All hyper-parameters, path roots, class names
+├── config.py           Hyper-parameters, path roots (DATA_DIR → ../data/raw)
 └── requirements.txt
 ```
 
@@ -272,7 +295,7 @@ inference-api/
 ├── src/
 │   ├── model.py        Inference-only build_model() (6 outputs)
 │   └── dataset.py      get_test_dataset() helper
-├── config.py           Points to ../model-training/outputs/checkpoints
+├── config.py           DATA_DIR → ../data/raw · CHECKPOINT_DIR → ../model-training/outputs/checkpoints
 └── requirements.txt
 ```
 
@@ -285,7 +308,7 @@ No configuration needed beyond `npm install`.
 
 ## Notes
 
-- **Shared venv**: `model-training/.venv` is used for both training and the API.
+- **Isolated venvs**: `model-training/.venv` and `inference-api/.venv` are fully independent. Training dependencies (matplotlib, seaborn, kagglehub, scikit-learn) are not installed in the API environment, and API dependencies (fastapi, uvicorn) are not installed in training.
 - **Device**: MPS → CUDA → CPU selected automatically; `NUM_WORKERS=0` avoids macOS fork issues.
 - **Checkpoint recovery**: `resume.pth` saves full training state (model + optimizer + scheduler + epoch counter); safe to interrupt at any point.
 - **CORS**: API allows all origins in dev — restrict `allow_origins` in `inference-api/api/main.py` for production.

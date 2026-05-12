@@ -2,8 +2,9 @@ from pathlib import Path
 import torch
 
 BASE_DIR        = Path(__file__).parent
+ROOT_DIR        = BASE_DIR.parent
 
-DATA_DIR        = BASE_DIR / "data" / "raw"
+DATA_DIR        = ROOT_DIR / "data" / "raw"
 OUTPUT_DIR      = BASE_DIR / "outputs"
 CHECKPOINT_DIR  = OUTPUT_DIR / "checkpoints"
 PLOT_DIR        = OUTPUT_DIR / "plots"
@@ -46,6 +47,3 @@ def get_device() -> str:
     return "cpu"
 
 DEVICE = get_device()
-
-API_HOST        = "127.0.0.1"
-API_PORT        = 8000

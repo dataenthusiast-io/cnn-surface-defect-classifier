@@ -1,5 +1,6 @@
 # Dataset – too large for git, download via script (see README)
-model-training/data/
+data/*
+!data/.gitkeep
 
 # Model checkpoints & outputs
 model-training/outputs/
