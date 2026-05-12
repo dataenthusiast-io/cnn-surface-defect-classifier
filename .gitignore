@@ -1,0 +1,19 @@
+# Dataset – too large for git, download via script (see README)
+model-training/data/
+
+# Model checkpoints & outputs
+model-training/outputs/
+
+# Python
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+*.egg-info/
+
+# Node
+inference-cockpit/node_modules/
+inference-cockpit/.next/
+
+# OS
+.DS_Store

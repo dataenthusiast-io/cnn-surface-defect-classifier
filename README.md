@@ -21,9 +21,22 @@ Each component is self-contained. `inference-api` reads the trained checkpoint f
 
 | Tool | Version |
 |---|---|
-| Python | 3.14 (managed by `model-training/.venv`) |
+| Python | 3.11+ |
 | Node.js | 18+ |
-| Kaggle credentials | `~/.kaggle/kaggle.json` (for initial data download) |
+| Kaggle credentials | `~/.kaggle/kaggle.json` — required to download the dataset |
+
+> **Dataset is not included in this repo** (`model-training/data/` is git-ignored).
+> Run the download script once before training (see step 2 below).
+
+---
+
+## Kaggle Setup (one-time)
+
+1. Log in at [kaggle.com](https://www.kaggle.com) → **Settings** → **API** → **Create New Token**.
+2. Move the downloaded file into place:
+   ```bash
+   mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+   ```
 
 ---
 
@@ -41,8 +54,9 @@ python3 -m venv .venv
 
 ```bash
 .venv/bin/python3 scripts/download_data.py
-# Downloads kaustubhdikshit/neu-surface-defect-database → data/raw/
-# 1 800 images across 6 surface-defect classes
+# Fetches kaustubhdikshit/neu-surface-defect-database via kagglehub
+# Merges train + validation splits → model-training/data/raw/
+# 1 800 images across 6 surface-defect classes (~25 MB)
 ```
 
 ### 3 · Train the model
