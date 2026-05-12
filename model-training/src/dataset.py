@@ -5,8 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from typing import Optional
 import random
+from typing import Optional
 
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
@@ -15,8 +15,7 @@ from PIL import Image
 
 from config import (
     DATA_DIR, IMG_SIZE, BATCH_SIZE, NUM_WORKERS,
-    TRAIN_SPLIT, VAL_SPLIT, RANDOM_SEED,
-    OK_CLASSES, DEFECT_CLASSES,
+    TRAIN_SPLIT, VAL_SPLIT, RANDOM_SEED, CLASS_NAMES,
 )
 
 
@@ -40,10 +39,10 @@ val_transform = transforms.Compose([
 
 
 class NEUDefectDataset(Dataset):
-    """Binary NEU Surface Defect dataset.
+    """6-class NEU Surface Defect dataset.
 
-    Scans DATA_DIR for class sub-folders. Folders in OK_CLASSES → label 0,
-    folders in DEFECT_CLASSES → label 1. All other folders are skipped.
+    Scans DATA_DIR for class sub-folders. Folder name is mapped to label by
+    CLASS_NAMES sorted order (alphabetical). Unknown folders are skipped.
     """
 
     def __init__(
@@ -54,11 +53,7 @@ class NEUDefectDataset(Dataset):
         self.transform = transform
         self.samples: list[tuple[Path, int]] = []
 
-        label_map: dict[str, int] = {}
-        for cls in OK_CLASSES:
-            label_map[cls] = 0
-        for cls in DEFECT_CLASSES:
-            label_map[cls] = 1
+        label_map = {name: idx for idx, name in enumerate(CLASS_NAMES)}
 
         for folder in sorted(root_dir.iterdir()):
             if not folder.is_dir():
@@ -99,10 +94,10 @@ def _stratified_split(
     val_frac: float,
     seed: int,
 ) -> tuple[list[int], list[int], list[int]]:
-    """Return (train_idx, val_idx, test_idx) using stratified splitting."""
+    """Return (train_idx, val_idx, test_idx) using per-class stratified splitting."""
     rng = random.Random(seed)
 
-    label_to_indices: dict[int, list[int]] = {0: [], 1: []}
+    label_to_indices: dict[int, list[int]] = {i: [] for i in range(len(CLASS_NAMES))}
     for i, (_, label) in enumerate(dataset.samples):
         label_to_indices[label].append(i)
 
@@ -160,8 +155,8 @@ def get_dataloaders(
     return train_loader, val_loader, test_loader
 
 
-def get_test_dataset(root_dir: Path = DATA_DIR) -> NEUDefectDataset:
-    """Return the test Subset dataset (used by InferencePipeline)."""
+def get_test_dataset(root_dir: Path = DATA_DIR) -> Subset:
+    """Return the test Subset (used by InferencePipeline)."""
     full_dataset = NEUDefectDataset(root_dir=root_dir, transform=None)
     _, _, test_idx = _stratified_split(
         full_dataset, TRAIN_SPLIT, VAL_SPLIT, RANDOM_SEED

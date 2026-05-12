@@ -11,7 +11,6 @@ import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import seaborn as sns
 from sklearn.metrics import (
     classification_report, confusion_matrix,
@@ -19,8 +18,8 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader
 
-from config import DEVICE, CHECKPOINT_DIR, PLOT_DIR, CLASS_NAMES, BATCH_SIZE, NUM_WORKERS
-from src.dataset import get_dataloaders, get_test_dataset, NEUDefectDataset
+from config import DEVICE, CHECKPOINT_DIR, PLOT_DIR, CLASS_NAMES, BATCH_SIZE, NUM_WORKERS, LOG_PATH
+from src.dataset import get_dataloaders, get_test_dataset
 from src.model import build_model
 
 
@@ -53,15 +52,15 @@ def predict_loader(
 def print_metrics(labels: list[int], preds: list[int], confs: list[float]) -> None:
     acc = accuracy_score(labels, preds)
     f1  = f1_score(labels, preds, average="macro", zero_division=0)
-    fn  = sum(1 for l, p in zip(labels, preds) if l == 1 and p == 0)
+    errors = sum(1 for l, p in zip(labels, preds) if l != p)
 
     print("\nTest-Ergebnisse")
-    print("─" * 42)
-    print(f"Accuracy:     {acc*100:.1f}%")
-    print(f"Macro F1:     {f1:.3f}")
-    print("─" * 42)
+    print("─" * 50)
+    print(f"Accuracy:        {acc*100:.1f}%")
+    print(f"Macro F1:        {f1:.3f}")
+    print(f"Fehlklassifikationen: {errors} / {len(labels)}")
+    print("─" * 50)
     print(classification_report(labels, preds, target_names=CLASS_NAMES, zero_division=0))
-    print(f"False Negatives (verpasste Defekte): {fn}")
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +87,7 @@ def plot_training_curves(log_path: Path, plot_dir: Path) -> None:
     phase2_start = next((e for e, p in zip(epochs, phases) if p == 2), None)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle("Training Curves", fontsize=14)
+    fig.suptitle("Training Curves – 6-class Defect Classifier", fontsize=14)
 
     def vline(ax):
         if phase2_start:
@@ -112,10 +111,10 @@ def plot_training_curves(log_path: Path, plot_dir: Path) -> None:
     ax = axes[1, 0]
     best_f1 = max(v_f1)
     best_ep = epochs[v_f1.index(best_f1)]
-    ax.plot(epochs, v_f1, label="Val F1")
+    ax.plot(epochs, v_f1, label="Val Macro F1")
     ax.scatter([best_ep], [best_f1], color="red", zorder=5, label=f"Best F1={best_f1:.3f}")
     vline(ax)
-    ax.set_title("Val F1")
+    ax.set_title("Val Macro F1")
     ax.legend()
 
     ax = axes[1, 1]
@@ -133,13 +132,17 @@ def plot_training_curves(log_path: Path, plot_dir: Path) -> None:
 
 def plot_confusion_matrix(labels: list[int], preds: list[int], plot_dir: Path) -> None:
     cm = confusion_matrix(labels, preds, normalize="true")
-    fig, ax = plt.subplots(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt=".2%", xticklabels=CLASS_NAMES,
-                yticklabels=CLASS_NAMES, cmap="Blues", ax=ax)
-    fn_rate = cm[1, 0]
-    ax.set_title(f"Confusion Matrix (normalised)\nFalse Negative Rate: {fn_rate:.1%}")
-    ax.set_ylabel("True")
-    ax.set_xlabel("Predicted")
+    fig, ax = plt.subplots(figsize=(8, 7))
+    sns.heatmap(
+        cm, annot=True, fmt=".2%",
+        xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES,
+        cmap="Blues", ax=ax,
+    )
+    ax.set_title("Confusion Matrix (normalised) — 6-class")
+    ax.set_ylabel("True Class")
+    ax.set_xlabel("Predicted Class")
+    plt.xticks(rotation=30, ha="right")
+    plt.yticks(rotation=0)
     plt.tight_layout()
     out = plot_dir / "confusion_matrix.png"
     plt.savefig(out, dpi=150)
@@ -185,7 +188,7 @@ def plot_sample_predictions(
             spine.set_linewidth(3)
 
         ax.set_title(
-            f"True: {CLASS_NAMES[true_label]} | Pred: {CLASS_NAMES[pred]}\nConf: {conf*100:.0f}%",
+            f"True: {CLASS_NAMES[true_label]}\nPred: {CLASS_NAMES[pred]}  {conf*100:.0f}%",
             fontsize=7,
         )
 
@@ -196,7 +199,7 @@ def plot_sample_predictions(
     print(f"Saved: {out}")
 
 
-def plot_error_grids(
+def plot_misclassifications(
     model: torch.nn.Module,
     test_subset,
     device: str,
@@ -208,7 +211,7 @@ def plot_error_grids(
         std=[1/0.229,       1/0.224,       1/0.225],
     )
 
-    fn_imgs, fp_imgs = [], []
+    errors = []
     for idx in range(len(test_subset)):
         img_tensor, true_label = test_subset[idx]
         with torch.no_grad():
@@ -217,43 +220,36 @@ def plot_error_grids(
             conf, pred = probs.max(dim=1)
         pred = pred.item()
         conf = conf.item()
-        img  = inv_norm(img_tensor).permute(1, 2, 0).clamp(0, 1).numpy()
-        if true_label == 1 and pred == 0:
-            fn_imgs.append((img, conf))
-        elif true_label == 0 and pred == 1:
-            fp_imgs.append((img, conf))
+        if pred != true_label:
+            img = inv_norm(img_tensor).permute(1, 2, 0).clamp(0, 1).numpy()
+            errors.append((img, true_label, pred, conf))
 
-    for name, items in [("false_negatives", fn_imgs), ("false_positives", fp_imgs)]:
-        if not items:
-            print(f"No {name}.")
-            continue
-        cols = min(len(items), 6)
-        rows = (len(items) + cols - 1) // cols
-        fig, axes = plt.subplots(rows, cols, figsize=(2.5 * cols, 2.5 * rows))
-        if rows == 1 and cols == 1:
-            axes = [[axes]]
-        elif rows == 1:
-            axes = [axes]
-        axes_flat = [ax for row in axes for ax in row]
+    if not errors:
+        print("No misclassifications — perfect test set!")
+        return
 
-        label = "False Negatives (Defekt → i.O.)" if name == "false_negatives" \
-                else "False Positives (i.O. → n.i.O.)"
-        fig.suptitle(f"{label}  (n={len(items)})", fontsize=11)
+    cols = min(len(errors), 6)
+    rows = (len(errors) + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(2.8 * cols, 3.0 * rows))
+    axes_flat = np.array(axes).flatten() if rows > 1 or cols > 1 else [axes]
+    fig.suptitle(f"Misclassifications (n={len(errors)})", fontsize=11)
 
-        for ax, (img, conf) in zip(axes_flat, items):
-            ax.imshow(img)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_title(f"Conf: {conf*100:.0f}%", fontsize=7)
+    for ax, (img, true_l, pred_l, conf) in zip(axes_flat, errors):
+        ax.imshow(img)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(
+            f"True: {CLASS_NAMES[true_l]}\nPred: {CLASS_NAMES[pred_l]}  {conf*100:.0f}%",
+            fontsize=7, color="red",
+        )
+    for ax in axes_flat[len(errors):]:
+        ax.axis("off")
 
-        for ax in axes_flat[len(items):]:
-            ax.axis("off")
-
-        plt.tight_layout()
-        out = plot_dir / f"{name}.png"
-        plt.savefig(out, dpi=150)
-        plt.close()
-        print(f"Saved: {out}")
+    plt.tight_layout()
+    out = plot_dir / "misclassifications.png"
+    plt.savefig(out, dpi=150)
+    plt.close()
+    print(f"Saved: {out}")
 
 
 def plot_confidence_distribution(
@@ -293,14 +289,13 @@ def evaluate() -> None:
     labels, preds, confs = predict_loader(model, test_loader, device)
     print_metrics(labels, preds, confs)
 
-    from config import LOG_PATH
     if LOG_PATH.exists():
         plot_training_curves(LOG_PATH, PLOT_DIR)
     plot_confusion_matrix(labels, preds, PLOT_DIR)
 
     test_subset = get_test_dataset()
     plot_sample_predictions(model, test_subset, device, PLOT_DIR)
-    plot_error_grids(model, test_subset, device, PLOT_DIR)
+    plot_misclassifications(model, test_subset, device, PLOT_DIR)
     plot_confidence_distribution(labels, preds, confs, PLOT_DIR)
 
     print(f"\nAll plots saved to: {PLOT_DIR}")

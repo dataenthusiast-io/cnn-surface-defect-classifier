@@ -17,9 +17,17 @@ VAL_SPLIT       = 0.15
 TEST_SPLIT      = 0.15
 RANDOM_SEED     = 42
 
-OK_CLASSES      = ["patches"]
-DEFECT_CLASSES  = ["crazing", "inclusion", "pitted_surface", "rolled-in_scale", "scratches"]
-CLASS_NAMES     = ["i.O.", "n.i.O."]
+# All 6 NEU defect categories — every image is a defective surface.
+# Labels are assigned by sorted folder name (alphabetical).
+CLASS_NAMES = [
+    "crazing",          # 0
+    "inclusion",        # 1
+    "patches",          # 2
+    "pitted_surface",   # 3
+    "rolled-in_scale",  # 4
+    "scratches",        # 5
+]
+NUM_CLASSES = len(CLASS_NAMES)
 
 PHASE1_EPOCHS       = 5
 PHASE1_LR_HEAD      = 1e-3

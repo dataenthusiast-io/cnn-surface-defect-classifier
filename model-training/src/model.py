@@ -14,6 +14,7 @@ from config import (
     PHASE1_LR_HEAD,
     PHASE2_LR_HEAD,
     PHASE2_LR_BACKBONE,
+    NUM_CLASSES,
 )
 
 
@@ -21,7 +22,7 @@ def build_model(device: str) -> nn.Module:
     model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
     model.fc = nn.Sequential(
         nn.Dropout(0.3),
-        nn.Linear(512, 2),
+        nn.Linear(512, NUM_CLASSES),
     )
     return model.to(device)
 

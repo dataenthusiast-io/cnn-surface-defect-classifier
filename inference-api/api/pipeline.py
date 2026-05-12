@@ -17,17 +17,14 @@ from src.dataset import get_test_dataset
 from src.model import build_model
 
 
-_to_pil = transforms.Compose([
-    transforms.Normalize(
-        mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
-        std=[1/0.229,       1/0.224,       1/0.225],
-    ),
-])
+_inv_norm = transforms.Normalize(
+    mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
+    std=[1/0.229,       1/0.224,       1/0.225],
+)
 
 
 def _tensor_to_b64(tensor: torch.Tensor) -> str:
-    """Convert a normalised CHW tensor to a base64-encoded PNG string."""
-    img = _to_pil(tensor).permute(1, 2, 0).clamp(0, 1)
+    img = _inv_norm(tensor).permute(1, 2, 0).clamp(0, 1)
     img_np = (img.numpy() * 255).astype("uint8")
     pil = Image.fromarray(img_np)
     buf = io.BytesIO()
@@ -50,12 +47,11 @@ class InferencePipeline:
 
         self._total_inspected = 0
         self._correct         = 0
-        self._defects         = 0
-        self._false_negatives = 0
-        self._false_positives = 0
+        self._errors          = 0
         self._conf_sum        = 0.0
+        self._class_counts: dict[str, int] = {c: 0 for c in CLASS_NAMES}
 
-    # ------------------------------------------------------------------
+        print(f"InferencePipeline loaded. Test-set size: {len(self.dataset)}")
 
     @torch.no_grad()
     def next(self) -> dict[str, Any]:
@@ -75,24 +71,21 @@ class InferencePipeline:
         self._conf_sum        += conf_val
         if correct:
             self._correct += 1
-        if pred_int == 1:
-            self._defects += 1
-        if true_label_int == 1 and pred_int == 0:
-            self._false_negatives += 1
-        if true_label_int == 0 and pred_int == 1:
-            self._false_positives += 1
+        else:
+            self._errors += 1
+        self._class_counts[CLASS_NAMES[pred_int]] += 1
 
         return {
-            "index":      self._index,
-            "total":      len(self.dataset),
-            "image_b64":  _tensor_to_b64(img_tensor),
-            "true_label": CLASS_NAMES[true_label_int],
-            "prediction": CLASS_NAMES[pred_int],
-            "confidence": round(conf_val, 4),
-            "correct":    bool(correct),
+            "index":       self._index,
+            "total":       len(self.dataset),
+            "image_b64":   _tensor_to_b64(img_tensor),
+            "true_label":  CLASS_NAMES[true_label_int],
+            "prediction":  CLASS_NAMES[pred_int],
+            "confidence":  round(conf_val, 4),
+            "correct":     bool(correct),
             "class_probs": {
-                CLASS_NAMES[0]: round(probs[0, 0].item(), 4),
-                CLASS_NAMES[1]: round(probs[0, 1].item(), 4),
+                CLASS_NAMES[i]: round(probs[0, i].item(), 4)
+                for i in range(len(CLASS_NAMES))
             },
         }
 
@@ -100,18 +93,16 @@ class InferencePipeline:
         self._index           = 0
         self._total_inspected = 0
         self._correct         = 0
-        self._defects         = 0
-        self._false_negatives = 0
-        self._false_positives = 0
+        self._errors          = 0
         self._conf_sum        = 0.0
+        self._class_counts    = {c: 0 for c in CLASS_NAMES}
 
     def get_stats(self) -> dict[str, Any]:
         n = self._total_inspected or 1
         return {
-            "total_inspected": self._total_inspected,
-            "defect_rate":     round(self._defects / n, 4),
-            "accuracy":        round(self._correct / n, 4),
-            "avg_confidence":  round(self._conf_sum / n, 4),
-            "false_negatives": self._false_negatives,
-            "false_positives": self._false_positives,
+            "total_inspected":  self._total_inspected,
+            "accuracy":         round(self._correct / n, 4),
+            "errors":           self._errors,
+            "avg_confidence":   round(self._conf_sum / n, 4),
+            "class_counts":     dict(self._class_counts),
         }

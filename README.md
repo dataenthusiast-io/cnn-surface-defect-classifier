@@ -1,6 +1,8 @@
 # CNN Surface Defect Detector
 
-Binary defect classification on steel surfaces using ResNet-18 transfer learning, a FastAPI inference service, and a Next.js real-time cockpit.
+**6-class surface defect classification** on the NEU steel surface dataset using ResNet-18 transfer learning, a FastAPI inference service, and a Next.js real-time cockpit.
+
+> **Important note on the dataset:** Every image in the NEU dataset shows a defective surface — there are no "good" samples. The task is therefore **defect-type classification** (which of the 6 defect classes is it?), not binary defect detection.
 
 ---
 
@@ -106,14 +108,24 @@ npm run dev
 
 ## Model Results
 
-Trained on 1 800 NEU surface-defect images; binary label: **i.O.** (patches class) vs **n.i.O.** (all 5 defect classes).
+Trained on 1 800 NEU surface-defect images; 300 images per class, balanced.
 
-| Metric | Value | PRD Target |
-|---|---|---|
-| Test Accuracy | 99.6 % | > 88 % |
-| Macro F1 | 0.993 | > 0.80 |
-| False Negatives | 1 / 225 | < 15 % FNR |
-| Training Time | ~80 s (M2 MPS) | < 15 min |
+| Class | Label |
+|---|---|
+| crazing | 0 |
+| inclusion | 1 |
+| patches | 2 |
+| pitted\_surface | 3 |
+| rolled-in\_scale | 4 |
+| scratches | 5 |
+
+| Metric | Smoke-test (2 ep) |
+|---|---|
+| Val Accuracy | 99.6 % |
+| Val Macro F1 | 0.996 |
+| Training Time | ~40 s (M2 MPS) |
+
+Full training (Phase 1: 5 ep + Phase 2: up to 20 ep with early stopping) expected to reach ≥ 99 % test accuracy.
 
 ---
 
