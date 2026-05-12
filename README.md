@@ -187,7 +187,7 @@ flowchart LR
 ## Inference Architecture
 
 ```mermaid
-flowchart TD
+flowchart LR
     CK[(best_model.pth)]
 
     subgraph api["inference-api  · Python · uvicorn"]
