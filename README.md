@@ -2,8 +2,6 @@
 
 6-class surface defect classification on the NEU steel surface dataset using ResNet-18 transfer learning, a FastAPI inference service, and a dark-mode real-time inspection cockpit.
 
-> **Dataset note:** Every image in the NEU dataset shows a defective surface — there are no "good" samples. The correct task is **defect-type classification** (which of the 6 classes?), not binary defect detection.
-
 ---
 
 ## Repository Layout
