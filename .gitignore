@@ -14,6 +14,7 @@ model-training/outputs/
 # Node
 inference-cockpit/node_modules/
 inference-cockpit/.next/
+cockpit/
 
 # OS
 .DS_Store
