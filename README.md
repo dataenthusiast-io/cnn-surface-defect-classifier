@@ -134,50 +134,112 @@ Full training consistently reaches ≥ 99 % test accuracy. Labels assigned by so
 
 ---
 
-## Architecture
+## Training Pipeline
 
 ```mermaid
-flowchart TD
+flowchart LR
     DS[(NEU Dataset\n1 800 images\n6 classes · 300 each)]
 
-    subgraph model-training
-        direction TB
-        DL[download_data.py\nkagglehub → data/raw/]
-        DS2[dataset.py\nstratified split 70/15/15]
-        M[model.py\nResNet-18 · FC 512→6]
-        T["train.py\nPhase 1 – head only  5 ep\nPhase 2 – fine-tune  ≤20 ep\ncosine LR · early stop"]
-        CK[(outputs/checkpoints\nbest_model.pth)]
-        E[evaluate.py\n6×6 confusion matrix\nper-class F1 · plots]
+    subgraph acquire["1 · Acquire"]
+        DL["download_data.py\nkagglehub.dataset_download()\ntrain + val → data/raw/&ltclass&gt/"]
     end
 
-    subgraph inference-api["inference-api  :8000"]
-        direction TB
-        PL[InferencePipeline\nloads best_model.pth\niterates test set]
-        EP["GET /health\nGET /predict/next\nGET /predict/reset\nGET /stats"]
+    subgraph prepare["2 · Prepare"]
+        DS2["dataset.py\nNEUDefectDataset\nstratified split\n70 % train · 15 % val · 15 % test"]
     end
 
-    subgraph inference-cockpit["inference-cockpit  :3000"]
-        direction TB
-        CV[Conveyor Panel\nimage · class badge\ntop-3 probs · recommendation]
-        ST[Stats Strip\naccuracy · errors · confidence]
-        TA[Trend Alert\nprocess drift detection]
-        CH[Confidence Chart\ncolour-coded by class]
-        LOG[Inspection Log\npriority badge · ground truth]
+    subgraph arch["3 · Model"]
+        BN["ResNet-18\nImageNet weights"]
+        HD["Custom head\nDropout 0.3\nLinear 512 → 6"]
+        BN --> HD
+    end
+
+    subgraph fit["4 · Train  train.py"]
+        P1["Phase 1 – head only\n5 epochs · lr 1e-3\nbackbone frozen"]
+        P2["Phase 2 – fine-tune\nlayer3 + layer4 + fc\n≤ 20 ep · cosine LR\nearly stop patience 5"]
+        P1 --> P2
+    end
+
+    subgraph out["5 · Output"]
+        CK[(best_model.pth\nlast_model.pth\nresume.pth)]
+        LOG2[(metrics.csv\nepoch-by-epoch log)]
+    end
+
+    subgraph eval["6 · Evaluate  evaluate.py"]
+        REP["classification report\nper-class precision / recall / F1"]
+        CM["6×6 confusion matrix"]
+        PLT["plots\ntraining curves · sample predictions\nmisclassifications · confidence dist."]
     end
 
     DS --> DL
     DL --> DS2
-    DS2 --> T
-    M --> T
-    T --> CK
-    CK --> E
+    DS2 --> P1
+    HD --> P1
+    P2 --> CK
+    P2 --> LOG2
+    CK --> REP
+    CK --> CM
+    CK --> PLT
+```
+
+---
+
+## Inference Architecture
+
+```mermaid
+flowchart TD
+    CK[(best_model.pth)]
+
+    subgraph api["inference-api  · Python · uvicorn"]
+        direction TB
+
+        subgraph startup["startup event"]
+            PL["InferencePipeline.__init__\nload checkpoint → ResNet-18\nload test set via get_test_dataset()"]
+        end
+
+        subgraph endpoints["FastAPI endpoints"]
+            E1["GET /health\n→ model name · device · test_size"]
+            E2["GET /predict/next\n→ index · image_b64 · prediction\n   confidence · correct · class_probs ×6"]
+            E3["GET /predict/reset\n→ resets index + running stats"]
+            E4["GET /stats\n→ accuracy · errors · avg_confidence\n   class_counts ×6"]
+        end
+
+        subgraph cors["CORS middleware"]
+            C["allow_origins = ['*']"]
+        end
+
+        PL --> E1
+        PL --> E2
+        PL --> E3
+        PL --> E4
+    end
+
+    subgraph cockpit["inference-cockpit  · Next.js 16  :3000"]
+        direction TB
+
+        subgraph poll["polling loop  setInterval(tick, speed)"]
+            T1["api.predictNext()\napi.getStats()"]
+        end
+
+        subgraph ui["UI panels"]
+            CV["Conveyor Panel\nimage · class badge · top-3 probs\nUrsache · Maßnahme · Teileentscheid"]
+            ST["KPI Strip\naccuracy · errors · avg confidence"]
+            TA["Trend Alert\nclass > 40 % → process drift warning"]
+            CH["Confidence Chart\nRecharts · dots coloured by class"]
+            LOG["Inspection Log\npriority badge · ground truth column"]
+        end
+
+        T1 -->|InspectionResult| CV
+        T1 -->|RunningStats| ST
+        T1 -->|RunningStats| TA
+        T1 -->|InspectionResult[]| CH
+        T1 -->|InspectionResult[]| LOG
+    end
+
     CK --> PL
-    PL --> EP
-    EP -->|HTTP polling| CV
-    EP -->|HTTP polling| ST
-    EP -->|HTTP polling| TA
-    EP -->|HTTP polling| CH
-    EP -->|HTTP polling| LOG
+    E2 -->|JSON · HTTP| T1
+    E4 -->|JSON · HTTP| T1
+    cors -.->|wraps| endpoints
 ```
 
 ---
