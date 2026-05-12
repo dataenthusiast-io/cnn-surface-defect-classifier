@@ -232,8 +232,8 @@ flowchart TD
         T1 -->|InspectionResult| CV
         T1 -->|RunningStats| ST
         T1 -->|RunningStats| TA
-        T1 -->|InspectionResult[]| CH
-        T1 -->|InspectionResult[]| LOG
+        T1 -->|InspectionResult history| CH
+        T1 -->|InspectionResult history| LOG
     end
 
     CK --> PL
