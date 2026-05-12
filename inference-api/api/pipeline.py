@@ -8,6 +8,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import random as _random
+
 import torch
 from torchvision import transforms
 from PIL import Image
@@ -42,8 +44,11 @@ class InferencePipeline:
         self.model.load_state_dict(torch.load(ckpt, map_location=self.device))
         self.model.eval()
 
-        self.dataset = get_test_dataset()
-        self._index  = 0
+        self.dataset  = get_test_dataset()
+        # Shuffle indices so consecutive samples come from different classes
+        self._order: list[int] = list(range(len(self.dataset)))
+        _random.shuffle(self._order)
+        self._pos = 0
 
         self._total_inspected = 0
         self._correct         = 0
@@ -55,8 +60,12 @@ class InferencePipeline:
 
     @torch.no_grad()
     def next(self) -> dict[str, Any]:
-        idx = self._index % len(self.dataset)
-        self._index += 1
+        # Re-shuffle when we've exhausted the shuffled order
+        if self._pos >= len(self._order):
+            _random.shuffle(self._order)
+            self._pos = 0
+        idx = self._order[self._pos]
+        self._pos += 1
 
         img_tensor, true_label_int = self.dataset[idx]
         logits = self.model(img_tensor.unsqueeze(0).to(self.device))
@@ -76,7 +85,7 @@ class InferencePipeline:
         self._class_counts[CLASS_NAMES[pred_int]] += 1
 
         return {
-            "index":       self._index,
+            "index":       self._pos,
             "total":       len(self.dataset),
             "image_b64":   _tensor_to_b64(img_tensor),
             "true_label":  CLASS_NAMES[true_label_int],
@@ -90,7 +99,8 @@ class InferencePipeline:
         }
 
     def reset(self) -> None:
-        self._index           = 0
+        _random.shuffle(self._order)
+        self._pos             = 0
         self._total_inspected = 0
         self._correct         = 0
         self._errors          = 0
