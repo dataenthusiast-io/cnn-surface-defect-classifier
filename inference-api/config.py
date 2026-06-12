@@ -16,12 +16,10 @@ TEST_SPLIT      = 0.15
 RANDOM_SEED     = 42
 
 CLASS_NAMES = [
-    "crazing",          # 0
-    "inclusion",        # 1
-    "patches",          # 2
-    "pitted_surface",   # 3
-    "rolled-in_scale",  # 4
-    "scratches",        # 5
+    "Abdruck 1",    # 0
+    "Abdruck 2",    # 1
+    "Stanzfehler",  # 2
+    "i.O.-Teile",   # 3
 ]
 NUM_CLASSES = len(CLASS_NAMES)
 

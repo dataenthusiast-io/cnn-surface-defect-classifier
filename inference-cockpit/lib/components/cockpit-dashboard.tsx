@@ -80,7 +80,7 @@ export function CockpitDashboard() {
         <div className="w-8 h-8 bg-zinc-800 border border-zinc-700 rounded-lg flex items-center justify-center text-zinc-300 text-sm font-bold font-mono">Q</div>
         <div>
           <h1 className="text-sm font-semibold text-zinc-100 leading-none tracking-wide uppercase">CNN Defect Inspector</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">6-Klassen Defektklassifikation · ResNet-18 · NEU Surface Defect Dataset</p>
+          <p className="text-xs text-zinc-500 mt-0.5">4-Klassen Defektklassifikation · ResNet-18 · Eigene Produktionsdaten</p>
         </div>
         <div className="ml-auto text-xs text-zinc-600 font-mono">
           {new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}

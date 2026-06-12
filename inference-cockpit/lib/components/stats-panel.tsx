@@ -47,7 +47,7 @@ export function StatsPanel({ stats }: StatsPanelProps) {
         <p className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest mb-3">Klassenverteilung · Predictions</p>
         <div className="space-y-2">
           {total === 0 ? (
-            [0,1,2,3,4,5].map(i => (
+            [0,1,2,3].map(i => (
               <div key={i} className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
                 <div className="w-28 h-2 bg-zinc-800 rounded animate-pulse" />
