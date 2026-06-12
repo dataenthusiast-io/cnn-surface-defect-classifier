@@ -1,167 +1,129 @@
 # Data Requirements
 
-This document describes the exact data format expected by the pipeline so the repo can be re-used as a boilerplate for any image classification domain, not only the original NEU steel surface dataset.
+This document describes the exact data format expected by the pipeline.
 
 ---
 
 ## Source Format (what you bring in)
 
-The pipeline was designed against the **NEU-DET** dataset structure (Pascal VOC-style). New datasets should match this layout.
+Raw images are captured with an iPhone (HEIC format) and organised into one folder per class before processing.
 
 ```
-<dataset-root>/
-├── train/
-│   ├── images/
-│   │   ├── <class_a>/
-│   │   │   ├── <class_a>_1.jpg
-│   │   │   ├── <class_a>_2.jpg
-│   │   │   └── …
-│   │   ├── <class_b>/
+<source-root>/
+├── Abdruck 1/
+│   ├── IMG_0001.HEIC
+│   └── …
+├── Abdruck 2/
+│   └── …
+├── Stanzfehler/
+│   └── …
+└── i.O.-Teile/
+    └── …
+```
+
+### Classes and sample counts
+
+| Class | Description | Samples |
+|---|---|---|
+| `Abdruck 1` | Werkzeugabdruck Typ 1 (leicht) | ~163 |
+| `Abdruck 2` | Werkzeugabdruck Typ 2 (schwer) | ~963 |
+| `Stanzfehler` | Stanzprozessfehler | ~156 |
+| `i.O.-Teile` | Gut-Teile (kein Defekt) | ~501 |
+
+---
+
+## Data Preparation Scripts
+
+Run the two preparation scripts in order:
+
+### Step 1 — HEIC → JPEG conversion
+
+```bash
+python scripts/convert_heic_to_jpg.py
+```
+
+Converts all `.HEIC` files in the source folders to `.jpg` and places them in `data/raw/<class>/`.
+Requires `pillow-heif` (already in `requirements.txt`).
+
+### Step 2 — Sequential rename + Pascal VOC annotation
+
+```bash
+python scripts/rename_and_annotate.py
+```
+
+Renames every image to `<Prefix>_N.jpg` (e.g. `Abdruck1_1.jpg`) and writes a matching Pascal VOC XML file to `data/annotations/`.
+
+---
+
+## Staged Format (what the pipeline reads)
+
+After both scripts have run:
+
+```
+data/
+├── raw/
+│   ├── Abdruck 1/
+│   │   ├── Abdruck1_1.jpg
 │   │   └── …
-│   └── annotations/
-│       ├── <class_a>_1.xml
-│       ├── <class_a>_2.xml
-│       └── …                   ← flat folder, one XML per image
-└── validation/
-    ├── images/
-    │   ├── <class_a>/
-    │   └── …
-    └── annotations/
-        └── …
+│   ├── Abdruck 2/
+│   │   └── …
+│   ├── Stanzfehler/
+│   │   └── …
+│   └── i.O.-Teile/
+│       └── …
+└── annotations/
+    ├── Abdruck1_1.xml
+    ├── Abdruck2_1.xml
+    └── …
 ```
 
-### Key constraints
-
-| Property | Value |
-|---|---|
-| Image format | JPEG (`.jpg` / `.jpeg`); PNG and BMP also accepted by the loader |
-| Image dimensions | Any fixed square or rectangular resolution; NEU-DET uses **200 × 200 px** |
-| Image colour depth | Grayscale content is fine — store as 3-channel RGB (even if R = G = B) |
-| Class folders | One sub-folder per class inside `images/`; folder name **is** the class label |
-| Annotation files | One XML per image, named `<image_stem>.xml`, placed flat in `annotations/` |
-| Splits | A `train/` and `validation/` split at minimum; ratio is not critical (the pipeline re-splits internally) |
-| Class balance | Aim for equal samples per class; NEU-DET has **300 per class** (240 train + 60 val) |
+`DefectDataset` (in `src/dataset.py`) reads every image under `data/raw/<class>/` and assigns the label from the `CLASS_NAMES` index in `config.py`. The annotations folder is not read by the classifier — it is kept for potential future object-detection extensions.
 
 ---
 
 ## Annotation XML Format (Pascal VOC)
 
-Each `.xml` file describes one image and may contain **one or more defect regions**.
+Each `.xml` file covers one image. The `<bndbox>` spans the full image since no region-level labelling was done.
 
 ```xml
 <annotation>
-  <folder>cr</folder>                   <!-- short label or folder abbreviation; informational only -->
-  <filename>crazing_1.jpg</filename>    <!-- must match the paired .jpg filename -->
-
+  <folder>Abdruck 1</folder>
+  <filename>Abdruck1_1.jpg</filename>
   <source>
-    <database>YOUR-DATASET-NAME</database>
+    <database>Produktionsdaten</database>
   </source>
-
   <size>
-    <width>200</width>                  <!-- image width in pixels -->
-    <height>200</height>                <!-- image height in pixels -->
-    <depth>1</depth>                    <!-- 1 = grayscale intent (even if stored as RGB) -->
+    <width>4032</width>
+    <height>3024</height>
+    <depth>3</depth>
   </size>
-
-  <segmented>0</segmented>              <!-- always 0 — no polygon segmentation used -->
-
-  <!-- repeat <object> for every defect region in the image -->
+  <segmented>0</segmented>
   <object>
-    <name>crazing</name>                <!-- must match the class folder name exactly -->
+    <name>Abdruck 1</name>
     <pose>Unspecified</pose>
-    <truncated>0</truncated>            <!-- 1 if the defect is cut off at image edge -->
-    <difficult>0</difficult>            <!-- 1 if hard to classify; loader can filter these out -->
+    <truncated>0</truncated>
+    <difficult>0</difficult>
     <bndbox>
-      <xmin>2</xmin>                    <!-- pixel coordinates, 0-indexed, top-left origin -->
-      <ymin>2</ymin>
-      <xmax>193</xmax>
-      <ymax>194</ymax>
+      <xmin>0</xmin>
+      <ymin>0</ymin>
+      <xmax>4032</xmax>
+      <ymax>3024</ymax>
     </bndbox>
   </object>
-
 </annotation>
 ```
 
-### Notes on the `<object>` block
-
-- An image can contain **1–N defect instances** — NEU-DET has up to 9 per image.
-- All `<object>` entries in a single file belong to the **same class** (one class per image). Mixed-class images are technically supported by the XML schema but are not used here.
-- `<difficult>` marks ambiguous or borderline examples. The current classifier ignores this flag — all objects are treated equally. If you want to exclude difficult examples during training, filter on this field in `dataset.py`.
-- `<bndbox>` coordinates are used for **object detection extensions only**. The current classification pipeline does not read bounding boxes — the class label comes from the folder name alone.
-
 ---
 
-## Staged Format (what the pipeline actually reads)
+## Class Imbalance
 
-The `download_data.py` script merges `train/images/<class>/` and `validation/images/<class>/` into a single flat pool:
-
-```
-data/raw/
-├── <class_a>/
-│   ├── train_<class_a>_1.jpg
-│   ├── train_<class_a>_2.jpg
-│   ├── validation_<class_a>_241.jpg
-│   └── …
-├── <class_b>/
-└── …
-```
-
-- Files are prefixed with `train_` or `validation_` to avoid name collisions.
-- The annotations folder is **not copied** — the classifier only needs the images.
-- `dataset.py` (via `NEUDefectDataset`) reads every image file under `data/raw/<class>/` and assigns a label by the **sorted alphabetical position** of the folder name.
-
-This is the only format the training and inference pipelines read. If you supply your own data, you can skip the Kaggle download entirely and populate `data/raw/` directly in this structure.
+The dataset is significantly imbalanced (`Abdruck 2` ~963 vs. `Stanzfehler` ~156 samples). The training script compensates with a weighted `CrossEntropyLoss` computed from the actual training split at runtime — no manual weight tuning needed.
 
 ---
 
 ## Adapting for a New Domain
 
-### Minimum checklist
-
-1. **Populate `data/raw/`** — one sub-folder per class, images inside.
-
-2. **Update `CLASS_NAMES` in `model-training/config.py`** — must match folder names exactly, in alphabetical order (the sort order determines the integer label):
-
-   ```python
-   CLASS_NAMES = [
-       "class_a",   # label 0
-       "class_b",   # label 1
-       "class_c",   # label 2
-   ]
-   NUM_CLASSES = len(CLASS_NAMES)
-   ```
-
-3. **Update `NUM_CLASSES`** — ResNet-18 head is built with this value; must equal `len(CLASS_NAMES)`.
-
-4. **Update the cockpit business logic** — `inference-cockpit/lib/` contains the priority levels, root-cause strings, and recommended actions that are currently specific to steel surface defects. Search for `KRITISCH`, `Ursache`, `Maßnahme` to find all display strings that need replacing.
-
-5. **Retrain from scratch** — use `src/train.py --restart` to discard any existing checkpoint and start fresh with the new class set.
-
-### Optional: bring your own XML annotations
-
-The XML annotations are not required by the classifier. They are included in the source format description above because:
-
-- They are present in NEU-DET and document the defect locations precisely.
-- They enable a future upgrade to **object detection** (e.g. YOLO, Faster R-CNN) without re-labelling.
-- If you plan to stay classification-only, plain images in class folders are sufficient — no XML needed.
-
-### Sample counts
-
-The model reaches ≥ 99 % accuracy on NEU-DET with 300 images per class. As a rule of thumb:
-
-| Samples per class | Expected outcome |
-|---|---|
-| < 50 | Likely to underfit; consider heavy augmentation or a smaller backbone |
-| 50 – 150 | Workable with strong augmentation and a frozen backbone (Phase 1 only) |
-| 150 – 500 | Good fit for the current two-phase ResNet-18 transfer learning setup |
-| 500+ | Consider unfreezing more backbone layers or switching to a larger model |
-
----
-
-## File Naming Convention (informational)
-
-NEU-DET uses `<class>_<n>.jpg` / `<class>_<n>.xml` where `n` is a sequential integer starting at 1. The pipeline does not enforce this — any unique filename is valid as long as:
-
-- The image file extension is `.jpg`, `.jpeg`, `.png`, or `.bmp`.
-- The XML `<filename>` tag matches the paired image file name (only relevant if you add detection code later).
-- File names within a class folder are unique.
+1. **Populate `data/raw/`** — one sub-folder per class, JPEG images inside.
+2. **Update `CLASS_NAMES` in `model-training/config.py` and `inference-api/config.py`** — must match folder names exactly.
+3. **Update the cockpit business logic** — `inference-cockpit/types/inspection.ts` contains priority levels, root-cause strings, and recommended actions specific to the current classes.
+4. **Retrain from scratch** — `python src/train.py --restart`.

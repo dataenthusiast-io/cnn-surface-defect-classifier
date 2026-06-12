@@ -7,7 +7,7 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono"
 
 export const metadata: Metadata = {
   title: "CNN Defect Inspector",
-  description: "6-Klassen Defektklassifikation · NEU Surface Defect Dataset",
+  description: "4-Klassen Defektklassifikation · Eigene Produktionsdaten",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

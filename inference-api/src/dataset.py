@@ -38,11 +38,11 @@ val_transform = transforms.Compose([
 ])
 
 
-class NEUDefectDataset(Dataset):
-    """6-class NEU Surface Defect dataset.
+class DefectDataset(Dataset):
+    """Production defect dataset.
 
     Scans DATA_DIR for class sub-folders. Folder name is mapped to label by
-    CLASS_NAMES sorted order (alphabetical). Unknown folders are skipped.
+    CLASS_NAMES index. Unknown folders are skipped.
     """
 
     def __init__(
@@ -68,7 +68,7 @@ class NEUDefectDataset(Dataset):
         if len(self.samples) == 0:
             raise RuntimeError(
                 f"No images found in {root_dir}. "
-                "Run scripts/download_data.py first."
+                "Run scripts/convert_heic_to_jpg.py and scripts/rename_and_annotate.py first."
             )
 
     def __len__(self) -> int:
@@ -89,7 +89,7 @@ class NEUDefectDataset(Dataset):
 
 
 def _stratified_split(
-    dataset: NEUDefectDataset,
+    dataset: DefectDataset,
     train_frac: float,
     val_frac: float,
     seed: int,
@@ -119,15 +119,15 @@ def get_dataloaders(
     root_dir: Path = DATA_DIR,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Build train / val / test DataLoaders with stratified splits."""
-    full_dataset = NEUDefectDataset(root_dir=root_dir, transform=None)
+    full_dataset = DefectDataset(root_dir=root_dir, transform=None)
 
     train_idx, val_idx, test_idx = _stratified_split(
         full_dataset, TRAIN_SPLIT, VAL_SPLIT, RANDOM_SEED
     )
 
-    train_ds = NEUDefectDataset(root_dir=root_dir, transform=train_transform)
-    val_ds   = NEUDefectDataset(root_dir=root_dir, transform=val_transform)
-    test_ds  = NEUDefectDataset(root_dir=root_dir, transform=val_transform)
+    train_ds = DefectDataset(root_dir=root_dir, transform=train_transform)
+    val_ds   = DefectDataset(root_dir=root_dir, transform=val_transform)
+    test_ds  = DefectDataset(root_dir=root_dir, transform=val_transform)
 
     train_loader = DataLoader(
         Subset(train_ds, train_idx),
@@ -157,11 +157,11 @@ def get_dataloaders(
 
 def get_test_dataset(root_dir: Path = DATA_DIR) -> Subset:
     """Return the test Subset (used by InferencePipeline)."""
-    full_dataset = NEUDefectDataset(root_dir=root_dir, transform=None)
+    full_dataset = DefectDataset(root_dir=root_dir, transform=None)
     _, _, test_idx = _stratified_split(
         full_dataset, TRAIN_SPLIT, VAL_SPLIT, RANDOM_SEED
     )
-    test_ds = NEUDefectDataset(root_dir=root_dir, transform=val_transform)
+    test_ds = DefectDataset(root_dir=root_dir, transform=val_transform)
     subset = Subset(test_ds, test_idx)
     subset.indices = test_idx  # type: ignore[attr-defined]
     return subset

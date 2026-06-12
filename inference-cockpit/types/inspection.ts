@@ -1,10 +1,15 @@
 export type DefectClass =
-  | "crazing"
-  | "inclusion"
-  | "patches"
-  | "pitted_surface"
-  | "rolled-in_scale"
-  | "scratches"
+  | "Abdruck 1"
+  | "Abdruck 2"
+  | "Stanzfehler"
+  | "i.O.-Teile"
+
+export interface GradCAMRegion {
+  x:      number  // normalisiert [0, 1]
+  y:      number
+  width:  number
+  height: number
+}
 
 export interface InspectionResult {
   index:       number
@@ -16,6 +21,8 @@ export interface InspectionResult {
   correct:     boolean
   class_probs: Record<DefectClass, number>
   timestamp:   number
+  gradcam_heatmap_b64?: string
+  gradcam_region?:      GradCAMRegion
 }
 
 export interface RunningStats {
@@ -28,21 +35,17 @@ export interface RunningStats {
 
 // ─── Visual palette ────────────────────────────────────────────────────────
 export const CLASS_COLORS: Record<DefectClass, { ring: string; text: string; dot: string; bg: string }> = {
-  "crazing":         { ring: "ring-amber-500",   text: "text-amber-400",   dot: "bg-amber-500",   bg: "bg-amber-500/10"   },
-  "inclusion":       { ring: "ring-rose-500",    text: "text-rose-400",    dot: "bg-rose-500",    bg: "bg-rose-500/10"    },
-  "patches":         { ring: "ring-zinc-400",    text: "text-zinc-300",    dot: "bg-zinc-400",    bg: "bg-zinc-700/40"    },
-  "pitted_surface":  { ring: "ring-orange-500",  text: "text-orange-400",  dot: "bg-orange-500",  bg: "bg-orange-500/10"  },
-  "rolled-in_scale": { ring: "ring-cyan-500",    text: "text-cyan-400",    dot: "bg-cyan-500",    bg: "bg-cyan-500/10"    },
-  "scratches":       { ring: "ring-red-500",     text: "text-red-400",     dot: "bg-red-500",     bg: "bg-red-500/10"     },
+  "Abdruck 1":  { ring: "ring-amber-500",   text: "text-amber-400",   dot: "bg-amber-500",   bg: "bg-amber-500/10"   },
+  "Abdruck 2":  { ring: "ring-orange-500",  text: "text-orange-400",  dot: "bg-orange-500",  bg: "bg-orange-500/10"  },
+  "Stanzfehler":{ ring: "ring-rose-500",    text: "text-rose-400",    dot: "bg-rose-500",    bg: "bg-rose-500/10"    },
+  "i.O.-Teile": { ring: "ring-emerald-500", text: "text-emerald-400", dot: "bg-emerald-500", bg: "bg-emerald-500/10" },
 }
 
 export const CLASS_HEX: Record<DefectClass, string> = {
-  "crazing":         "#f59e0b",
-  "inclusion":       "#f43f5e",
-  "patches":         "#a1a1aa",
-  "pitted_surface":  "#f97316",
-  "rolled-in_scale": "#06b6d4",
-  "scratches":       "#ef4444",
+  "Abdruck 1":  "#f59e0b",
+  "Abdruck 2":  "#f97316",
+  "Stanzfehler":"#f43f5e",
+  "i.O.-Teile": "#10b981",
 }
 
 // ─── Business logic ────────────────────────────────────────────────────────
@@ -57,47 +60,33 @@ export interface DefectInfo {
 }
 
 export const DEFECT_INFO: Record<DefectClass, DefectInfo> = {
-  "inclusion": {
+  "Stanzfehler": {
     priority:    "critical",
     label:       "KRITISCH",
-    cause:       "Materialfehler im Rohstoff (Schlackeneinschluss)",
-    action:      "Produktionslinie stoppen — Rohmaterialcharge prüfen und sperren",
+    cause:       "Stanzprozess fehlerhaft — Werkzeugbruch oder Materialversagen",
+    action:      "Produktionslinie stoppen — Stanzwerkzeug prüfen und sperren",
     disposition: "Ausschuss — nicht weiterverwendbar",
   },
-  "scratches": {
+  "Abdruck 2": {
     priority:    "high",
     label:       "HOCH",
-    cause:       "Mechanische Beschädigung in der Walzlinie",
-    action:      "Werkzeugverschleiß messen, Führungsrollen & Kaliber kontrollieren",
-    disposition: "Ausschuss bei Tiefe > Toleranz",
-  },
-  "pitted_surface": {
-    priority:    "high",
-    label:       "HOCH",
-    cause:       "Kühlmittel- oder Schmierungsproblem, Korrosionsanzeichen",
-    action:      "Kühlsystem & Schmierung überprüfen, Lagerungsbedingungen kontrollieren",
-    disposition: "Ausschuss — Nachfolgecharge beobachten",
-  },
-  "rolled-in_scale": {
-    priority:    "high",
-    label:       "HOCH",
-    cause:       "Zunder eingewalzt — Entzunderungsanlage unterlastet",
-    action:      "Entzunderungsanlage prüfen, Vorwärmtemperatur und Haspeldruck anpassen",
+    cause:       "Werkzeugabdruck Typ 2 — erhöhter Werkzeugverschleiß",
+    action:      "Werkzeugverschleiß messen, Oberfläche und Führungen kontrollieren",
     disposition: "Ausschuss",
   },
-  "crazing": {
+  "Abdruck 1": {
     priority:    "medium",
     label:       "MITTEL",
-    cause:       "Materialermüdung / thermische Eigenspannungen",
-    action:      "Walzendruck & Temperaturprofil anpassen, Abkühlrate verringern",
-    disposition: "Prüfung erforderlich — je nach Tiefe der Risse",
+    cause:       "Werkzeugabdruck Typ 1 — leichte Oberflächenmarkierung",
+    action:      "Werkzeugoberfläche prüfen, Schmiermittelauftrag kontrollieren",
+    disposition: "Nacharbeit möglich — Sichtprüfung erforderlich",
   },
-  "patches": {
+  "i.O.-Teile": {
     priority:    "low",
     label:       "GERING",
-    cause:       "Oberflächliche Unregelmäßigkeit, leichte Oxidation",
-    action:      "Sichtprüfung — Kundenvorgaben für Oberflächenklasse prüfen",
-    disposition: "Eventuell für Abnehmer B/C verwendbar",
+    cause:       "Kein Defekt erkannt",
+    action:      "Keine Maßnahme erforderlich",
+    disposition: "Freigabe",
   },
 }
 

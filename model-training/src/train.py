@@ -21,9 +21,12 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import f1_score
 from tqdm import tqdm
 
+import numpy as np
+from sklearn.utils.class_weight import compute_class_weight
+
 from config import (
     DEVICE, CHECKPOINT_DIR, LOG_PATH,
-    PHASE1_EPOCHS, PHASE2_EPOCHS, PATIENCE,
+    PHASE1_EPOCHS, PHASE2_EPOCHS, PATIENCE, NUM_CLASSES,
 )
 from src.dataset import get_dataloaders
 from src.model import (
@@ -177,8 +180,21 @@ def train(smoke_test: bool = False, restart: bool = False) -> None:
     print(f"{'═'*60}\n")
 
     train_loader, val_loader, _ = get_dataloaders()
-    criterion = nn.CrossEntropyLoss()
-    model     = build_model(device)
+
+    # Weighted loss to compensate for class imbalance in the training set.
+    train_labels = [
+        train_loader.dataset.dataset.samples[i][1]
+        for i in train_loader.dataset.indices
+    ]
+    class_weights = compute_class_weight(
+        "balanced",
+        classes=np.arange(NUM_CLASSES),
+        y=train_labels,
+    )
+    criterion = nn.CrossEntropyLoss(
+        weight=torch.tensor(class_weights, dtype=torch.float32).to(device)
+    )
+    model = build_model(device)
 
     # ── Determine start state ────────────────────────────────────────────────
     resume_phase        = 1
