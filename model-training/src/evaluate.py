@@ -87,7 +87,7 @@ def plot_training_curves(log_path: Path, plot_dir: Path) -> None:
     phase2_start = next((e for e, p in zip(epochs, phases) if p == 2), None)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle("Training Curves – 6-class Defect Classifier", fontsize=14)
+    fig.suptitle("Training Curves – 4-class Defect Classifier", fontsize=14)
 
     def vline(ax):
         if phase2_start:
@@ -138,7 +138,7 @@ def plot_confusion_matrix(labels: list[int], preds: list[int], plot_dir: Path) -
         xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES,
         cmap="Blues", ax=ax,
     )
-    ax.set_title("Confusion Matrix (normalised) — 6-class")
+    ax.set_title("Confusion Matrix (normalised) — 4-class")
     ax.set_ylabel("True Class")
     ax.set_xlabel("Predicted Class")
     plt.xticks(rotation=30, ha="right")
