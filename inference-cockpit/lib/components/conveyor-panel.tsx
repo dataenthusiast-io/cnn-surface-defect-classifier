@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { CheckCircle2, XCircle } from "lucide-react"
-import { InspectionResult, RunningStats, CLASS_COLORS } from "@/types/inspection"
+import { InspectionResult, RunningStats, CLASS_COLORS, CLASS_HEX } from "@/types/inspection"
 import { cn } from "@/lib/utils"
 
 interface ConveyorPanelProps {
@@ -11,13 +11,46 @@ interface ConveyorPanelProps {
 }
 
 export function ConveyorPanel({ result, stats }: ConveyorPanelProps) {
-  const [visible, setVisible] = useState(true)
+  const [visible,     setVisible]     = useState(true)
+  const [showHeatmap, setShowHeatmap] = useState(true)
+  const [showBBox,    setShowBBox]    = useState(true)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     setVisible(false)
     const t = setTimeout(() => setVisible(true), 120)
     return () => clearTimeout(t)
   }, [result?.index])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")!
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    const drawBox = () => {
+      if (!result?.gradcam_region || !showBBox) return
+      const { x, y, width, height } = result.gradcam_region
+      ctx.strokeStyle = CLASS_HEX[result.prediction] ?? "#ffffff"
+      ctx.lineWidth = 2
+      ctx.setLineDash([4, 3])
+      ctx.strokeRect(x * 224, y * 224, width * 224, height * 224)
+      ctx.setLineDash([])
+    }
+
+    if (result?.gradcam_heatmap_b64 && showHeatmap) {
+      const img = new window.Image()
+      img.onload = () => {
+        ctx.globalAlpha = 0.40
+        ctx.drawImage(img, 0, 0, 224, 224)
+        ctx.globalAlpha = 1.0
+        drawBox()
+      }
+      img.src = `data:image/png;base64,${result.gradcam_heatmap_b64}`
+    } else {
+      drawBox()
+    }
+  }, [result, showHeatmap, showBBox])
 
   const conf   = result ? Math.round(result.confidence * 100) : 0
   const colors = result ? CLASS_COLORS[result.prediction] : null
@@ -63,6 +96,29 @@ export function ConveyorPanel({ result, stats }: ConveyorPanelProps) {
             <span className="text-[10px] font-mono">WARTE AUF INSPEKTION</span>
           </div>
         )}
+        <canvas
+          ref={canvasRef}
+          width={224} height={224}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+        />
+      </div>
+
+      {/* ── Grad-CAM toggles ── */}
+      <div className="flex items-center gap-5">
+        {([
+          [showHeatmap, setShowHeatmap, "Grad-CAM"] as const,
+          [showBBox,    setShowBBox,    "Bounding Box"] as const,
+        ]).map(([val, set, label]) => (
+          <label key={label} className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={val}
+              onChange={e => set(e.target.checked)}
+              className="accent-amber-500 w-3 h-3"
+            />
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">{label}</span>
+          </label>
+        ))}
       </div>
 
       {/* ── Confidence bar ── */}

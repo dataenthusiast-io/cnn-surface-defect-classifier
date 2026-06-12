@@ -10,7 +10,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import random as _random
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 from torchvision import transforms
 from PIL import Image
 
@@ -58,6 +60,60 @@ class InferencePipeline:
 
         print(f"InferencePipeline loaded. Test-set size: {len(self.dataset)}")
 
+    def _gradcam(self, img_tensor: torch.Tensor, class_idx: int):
+        """Compute Grad-CAM heatmap for the given class using model.layer4."""
+        activations: list[torch.Tensor] = []
+        gradients:   list[torch.Tensor] = []
+
+        fwd = self.model.layer4.register_forward_hook(
+            lambda m, i, o: activations.append(o))
+        bwd = self.model.layer4.register_full_backward_hook(
+            lambda m, gi, go: gradients.append(go[0]))
+
+        with torch.enable_grad():
+            t = img_tensor.unsqueeze(0).to(self.device)
+            logits = self.model(t)
+            self.model.zero_grad()
+            logits[0, class_idx].backward()
+
+        fwd.remove()
+        bwd.remove()
+
+        weights = gradients[0].mean(dim=(2, 3))                          # [1, C]
+        cam = torch.relu(
+            (weights[0, :, None, None] * activations[0][0]).sum(0)       # [H, W]
+        )
+        cam = F.interpolate(
+            cam.unsqueeze(0).unsqueeze(0), size=(224, 224),
+            mode="bilinear", align_corners=False,
+        ).squeeze().cpu().numpy()
+        cam = cam / (cam.max() + 1e-8)
+
+        # Jet colormap via pure numpy
+        r = np.clip(1.5 - np.abs(4 * cam - 3), 0, 1)
+        g = np.clip(1.5 - np.abs(4 * cam - 2), 0, 1)
+        b = np.clip(1.5 - np.abs(4 * cam - 1), 0, 1)
+        heatmap_rgb = (np.stack([r, g, b], axis=-1) * 255).astype(np.uint8)
+
+        buf = io.BytesIO()
+        Image.fromarray(heatmap_rgb).save(buf, format="PNG")
+        heatmap_b64 = base64.b64encode(buf.getvalue()).decode()
+
+        # Bounding box at 50% activation threshold
+        mask = cam > 0.5
+        ys, xs = np.where(mask)
+        if len(xs):
+            region = {
+                "x":      float(xs.min()) / 224,
+                "y":      float(ys.min()) / 224,
+                "width":  float(xs.max() - xs.min()) / 224,
+                "height": float(ys.max() - ys.min()) / 224,
+            }
+        else:
+            region = {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
+
+        return heatmap_b64, region
+
     @torch.no_grad()
     def next(self) -> dict[str, Any]:
         # Re-shuffle when we've exhausted the shuffled order
@@ -84,6 +140,8 @@ class InferencePipeline:
             self._errors += 1
         self._class_counts[CLASS_NAMES[pred_int]] += 1
 
+        heatmap_b64, region = self._gradcam(img_tensor, pred_int)
+
         return {
             "index":       self._pos,
             "total":       len(self.dataset),
@@ -96,6 +154,8 @@ class InferencePipeline:
                 CLASS_NAMES[i]: round(probs[0, i].item(), 4)
                 for i in range(len(CLASS_NAMES))
             },
+            "gradcam_heatmap_b64": heatmap_b64,
+            "gradcam_region":      region,
         }
 
     def reset(self) -> None:
