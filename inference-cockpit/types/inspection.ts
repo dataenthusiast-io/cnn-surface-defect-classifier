@@ -4,13 +4,6 @@ export type DefectClass =
   | "Stanzfehler"
   | "i.O.-Teile"
 
-export interface GradCAMRegion {
-  x:      number  // normalisiert [0, 1]
-  y:      number
-  width:  number
-  height: number
-}
-
 export interface InspectionResult {
   index:       number
   total:       number
@@ -22,7 +15,6 @@ export interface InspectionResult {
   class_probs: Record<DefectClass, number>
   timestamp:   number
   gradcam_heatmap_b64?: string
-  gradcam_region?:      GradCAMRegion
 }
 
 export interface RunningStats {

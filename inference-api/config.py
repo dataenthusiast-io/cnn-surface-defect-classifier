@@ -8,11 +8,8 @@ DATA_DIR        = _ROOT / "data" / "raw"
 CHECKPOINT_DIR  = _ROOT / "model-training" / "outputs" / "checkpoints"
 
 IMG_SIZE        = 224
-BATCH_SIZE      = 32
-NUM_WORKERS     = 0
 TRAIN_SPLIT     = 0.70
 VAL_SPLIT       = 0.15
-TEST_SPLIT      = 0.15
 RANDOM_SEED     = 42
 
 CLASS_NAMES = [
@@ -31,6 +28,3 @@ def get_device() -> str:
     return "cpu"
 
 DEVICE = get_device()
-
-API_HOST        = "127.0.0.1"
-API_PORT        = 8000

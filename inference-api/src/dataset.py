@@ -9,26 +9,15 @@ import random
 from typing import Optional
 
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, Subset
 from torchvision import transforms
 from PIL import Image
 
 from config import (
-    DATA_DIR, IMG_SIZE, BATCH_SIZE, NUM_WORKERS,
+    DATA_DIR, IMG_SIZE,
     TRAIN_SPLIT, VAL_SPLIT, RANDOM_SEED, CLASS_NAMES,
 )
 
-
-train_transform = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
-    transforms.RandomRotation(10),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-])
 
 val_transform = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
@@ -68,7 +57,7 @@ class DefectDataset(Dataset):
         if len(self.samples) == 0:
             raise RuntimeError(
                 f"No images found in {root_dir}. "
-                "Run scripts/convert_heic_to_jpg.py and scripts/rename_and_annotate.py first."
+                "Run scripts/convert_heic_to_jpg.py and scripts/rename_images.py first."
             )
 
     def __len__(self) -> int:
@@ -80,12 +69,6 @@ class DefectDataset(Dataset):
         if self.transform:
             img = self.transform(img)
         return img, label
-
-    def get_image_path(self, idx: int) -> Path:
-        return self.samples[idx][0]
-
-    def get_labels(self) -> list[int]:
-        return [label for _, label in self.samples]
 
 
 def _stratified_split(
@@ -113,46 +96,6 @@ def _stratified_split(
         test_idx.extend(indices[n_train + n_val:])
 
     return train_idx, val_idx, test_idx
-
-
-def get_dataloaders(
-    root_dir: Path = DATA_DIR,
-) -> tuple[DataLoader, DataLoader, DataLoader]:
-    """Build train / val / test DataLoaders with stratified splits."""
-    full_dataset = DefectDataset(root_dir=root_dir, transform=None)
-
-    train_idx, val_idx, test_idx = _stratified_split(
-        full_dataset, TRAIN_SPLIT, VAL_SPLIT, RANDOM_SEED
-    )
-
-    train_ds = DefectDataset(root_dir=root_dir, transform=train_transform)
-    val_ds   = DefectDataset(root_dir=root_dir, transform=val_transform)
-    test_ds  = DefectDataset(root_dir=root_dir, transform=val_transform)
-
-    train_loader = DataLoader(
-        Subset(train_ds, train_idx),
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=NUM_WORKERS,
-    )
-    val_loader = DataLoader(
-        Subset(val_ds, val_idx),
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=NUM_WORKERS,
-    )
-    test_loader = DataLoader(
-        Subset(test_ds, test_idx),
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=NUM_WORKERS,
-    )
-
-    print(
-        f"Dataset split — "
-        f"Train: {len(train_idx)} | Val: {len(val_idx)} | Test: {len(test_idx)}"
-    )
-    return train_loader, val_loader, test_loader
 
 
 def get_test_dataset(root_dir: Path = DATA_DIR) -> Subset:

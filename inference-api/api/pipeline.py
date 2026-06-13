@@ -60,8 +60,8 @@ class InferencePipeline:
 
         print(f"InferencePipeline loaded. Test-set size: {len(self.dataset)}")
 
-    def _gradcam(self, img_tensor: torch.Tensor, class_idx: int):
-        """Compute Grad-CAM heatmap for the given class using model.layer4."""
+    def _gradcam(self, img_tensor: torch.Tensor, class_idx: int) -> str:
+        """Compute Grad-CAM heatmap (base64 PNG) for the given class using model.layer4."""
         activations: list[torch.Tensor] = []
         gradients:   list[torch.Tensor] = []
 
@@ -86,7 +86,7 @@ class InferencePipeline:
         cam = F.interpolate(
             cam.unsqueeze(0).unsqueeze(0), size=(224, 224),
             mode="bilinear", align_corners=False,
-        ).squeeze().cpu().numpy()
+        ).squeeze().detach().cpu().numpy()
         cam = cam / (cam.max() + 1e-8)
 
         # Jet colormap via pure numpy
@@ -97,22 +97,7 @@ class InferencePipeline:
 
         buf = io.BytesIO()
         Image.fromarray(heatmap_rgb).save(buf, format="PNG")
-        heatmap_b64 = base64.b64encode(buf.getvalue()).decode()
-
-        # Bounding box at 50% activation threshold
-        mask = cam > 0.5
-        ys, xs = np.where(mask)
-        if len(xs):
-            region = {
-                "x":      float(xs.min()) / 224,
-                "y":      float(ys.min()) / 224,
-                "width":  float(xs.max() - xs.min()) / 224,
-                "height": float(ys.max() - ys.min()) / 224,
-            }
-        else:
-            region = {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
-
-        return heatmap_b64, region
+        return base64.b64encode(buf.getvalue()).decode()
 
     @torch.no_grad()
     def next(self) -> dict[str, Any]:
@@ -140,7 +125,7 @@ class InferencePipeline:
             self._errors += 1
         self._class_counts[CLASS_NAMES[pred_int]] += 1
 
-        heatmap_b64, region = self._gradcam(img_tensor, pred_int)
+        heatmap_b64 = self._gradcam(img_tensor, pred_int)
 
         return {
             "index":       self._pos,
@@ -155,7 +140,6 @@ class InferencePipeline:
                 for i in range(len(CLASS_NAMES))
             },
             "gradcam_heatmap_b64": heatmap_b64,
-            "gradcam_region":      region,
         }
 
     def reset(self) -> None:

@@ -10,11 +10,10 @@
 cnn-project/
 ├── data/                          Gemeinsamer Dataset-Root — git-ignoriert
 │   ├── data-new/<klasse>/         Originale HEIC-Bilder (iPhone) — git-ignoriert
-│   ├── raw/<klasse>/              Konvertierte JPEG-Bilder — git-ignoriert
-│   └── annotations/               Pascal VOC XML Annotationen — git-ignoriert
+│   └── raw/<klasse>/              Konvertierte JPEG-Bilder — git-ignoriert
 ├── model-training/                PyTorch Training-Pipeline (ResNet-18, 4-Klassen)
 │   ├── src/                       dataset · model · train · evaluate · predict
-│   ├── scripts/                   convert_heic_to_jpg.py · rename_and_annotate.py
+│   ├── scripts/                   convert_heic_to_jpg.py · rename_images.py
 │   ├── outputs/                   checkpoints · logs · plots — git-ignoriert
 │   ├── config.py
 │   └── requirements.txt
@@ -26,13 +25,13 @@ cnn-project/
 └── inference-cockpit/             Next.js 16 Dark-Mode Inspektions-Cockpit
     ├── app/                       Next.js App Router
     ├── lib/                       API-Client · Komponenten · Utils
-    └── types/                     TypeScript Typen (inkl. GradCAMRegion)
+    └── types/                     TypeScript Typen (InspectionResult u. a.)
 ```
 
 **Datenfluss:**
 - `data/data-new/` enthält die Original-iPhone-Bilder (HEIC-Format) pro Klasse.
 - `scripts/convert_heic_to_jpg.py` konvertiert sie nach `data/raw/<klasse>/`.
-- `scripts/rename_and_annotate.py` benennt die Bilder sequenziell um und erstellt Pascal VOC XML Annotationen.
+- `scripts/rename_images.py` benennt die Bilder sequenziell um (`<Prefix>_N.jpg`).
 - Das trainierte Checkpoint (`model-training/outputs/checkpoints/best_model.pth`) wird von `inference-api` geladen.
 
 ---
@@ -171,7 +170,7 @@ flowchart LR
 
     subgraph acquire["1 · Vorbereiten"]
         DL["convert_heic_to_jpg.py\nHEIC → JPEG · Qualität 95"]
-        RN["rename_and_annotate.py\nAbdruck1_N.jpg · Pascal VOC XML"]
+        RN["rename_images.py\nAbdruck1_N.jpg"]
         DL --> RN
     end
 
@@ -230,7 +229,7 @@ flowchart LR
 
         subgraph endpoints["FastAPI Endpoints"]
             E1["GET /health\n→ status · device · test_size"]
-            E2["GET /predict/next\n→ image_b64 · prediction · confidence\n   class_probs ×4\n   gradcam_heatmap_b64\n   gradcam_region {x,y,w,h}"]
+            E2["GET /predict/next\n→ image_b64 · prediction · confidence\n   class_probs ×4\n   gradcam_heatmap_b64"]
             E3["GET /predict/reset\n→ Index + Stats zurücksetzen"]
             E4["GET /stats\n→ accuracy · errors · avg_confidence\n   class_counts ×4"]
         end
@@ -249,7 +248,7 @@ flowchart LR
         end
 
         subgraph ui["UI Panels"]
-            CV["Conveyor Panel\nBild + Grad-CAM Heatmap Overlay\nBounding Box (Toggle)\nKonfidenz · Top-3 Klassen"]
+            CV["Conveyor Panel\nBild + Grad-CAM Heatmap Overlay\nKonfidenz · Top-3 Klassen"]
             REC["Prozessempfehlung\nUrsache · Maßnahme · Teileentscheid"]
             ST["KPI Strip\nAccuracy · Fehler · Ø Konfidenz"]
             TA["Trend Alert\nKlasse > 40 % → Prozessdrift"]
@@ -277,8 +276,9 @@ flowchart LR
 Jede Klassifikation liefert eine visuelle Erklärung, warum das Netz die Entscheidung getroffen hat:
 
 - **Heatmap**: Jet-coloriertes Overlay (Blau → Grün → Gelb → Rot) zeigt welche Bildregion zur Entscheidung beigetragen hat. Berechnet via Gradienten auf `model.layer4` (letzte Convolutional-Schicht vor GlobalAvgPool).
-- **Bounding Box**: Gestrichelte Box in der Klassenfarbe um die aktivste Region (Schwelle 50 %).
-- **Zwei Checkboxen** im Dashboard zum unabhängigen Ein-/Ausblenden.
+- **Checkbox** im Dashboard zum Ein-/Ausblenden des Overlays.
+
+Hinweis: Die Heatmap ist eine 7×7-Aktivierungskarte (hochskaliert) und pro Bild auf ihr Maximum normiert — sie zeigt die *relative* Aufmerksamkeit des Modells, keine exakte Defektkontur.
 
 Implementierung: Pure PyTorch + NumPy — keine zusätzlichen Abhängigkeiten.
 
@@ -298,7 +298,7 @@ model-training/
 │   └── predict.py          Einzelbild CLI-Inferenz
 ├── scripts/
 │   ├── convert_heic_to_jpg.py   HEIC → JPEG (pillow-heif)
-│   └── rename_and_annotate.py   Sequenzielle Umbenennung + Pascal VOC XML
+│   └── rename_images.py         Sequenzielle Umbenennung
 ├── outputs/                checkpoints · logs · plots — git-ignoriert
 ├── config.py               Hyperparameter, Pfade, CLASS_NAMES (4 Klassen)
 └── requirements.txt
@@ -311,7 +311,7 @@ inference-api/
 ├── api/
 │   ├── main.py             FastAPI App, CORS, Endpoints
 │   └── pipeline.py         InferencePipeline — Modell laden, Test-Set iterieren,
-│                           Grad-CAM Heatmap + Bounding Box berechnen
+│                           Grad-CAM Heatmap berechnen
 ├── src/
 │   ├── model.py            build_model() — 4 Ausgaben
 │   └── dataset.py          get_test_dataset() Helper
@@ -329,7 +329,7 @@ inference-cockpit/
 ├── lib/
 │   ├── api.ts              REST-Client (4 Endpoints)
 │   └── components/
-│       ├── conveyor-panel.tsx      Bild + Grad-CAM Canvas-Overlay + Checkboxen
+│       ├── conveyor-panel.tsx      Bild + Grad-CAM Canvas-Overlay + Checkbox
 │       ├── cockpit-dashboard.tsx   State-Container, Polling-Loop
 │       ├── recommendation-card.tsx Prozessempfehlung
 │       ├── stats-panel.tsx         Klassenverteilung + Drift-Alert
@@ -338,7 +338,7 @@ inference-cockpit/
 │       ├── alert-banner.tsx        Fehlklassifikations-Banner
 │       └── control-bar.tsx         Start/Stop/Reset + Geschwindigkeit
 └── types/
-    └── inspection.ts       DefectClass · InspectionResult · GradCAMRegion
+    └── inspection.ts       DefectClass · InspectionResult
                             CLASS_COLORS · CLASS_HEX · DEFECT_INFO
 ```
 

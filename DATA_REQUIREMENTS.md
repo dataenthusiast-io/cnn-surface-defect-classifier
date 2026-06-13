@@ -45,13 +45,13 @@ python scripts/convert_heic_to_jpg.py
 Converts all `.HEIC` files in the source folders to `.jpg` and places them in `data/raw/<class>/`.
 Requires `pillow-heif` (already in `requirements.txt`).
 
-### Step 2 — Sequential rename + Pascal VOC annotation
+### Step 2 — Sequential rename
 
 ```bash
-python scripts/rename_and_annotate.py
+python scripts/rename_images.py
 ```
 
-Renames every image to `<Prefix>_N.jpg` (e.g. `Abdruck1_1.jpg`) and writes a matching Pascal VOC XML file to `data/annotations/`.
+Renames every image to `<Prefix>_N.jpg` (e.g. `Abdruck1_1.jpg`).
 
 ---
 
@@ -61,57 +61,19 @@ After both scripts have run:
 
 ```
 data/
-├── raw/
-│   ├── Abdruck 1/
-│   │   ├── Abdruck1_1.jpg
-│   │   └── …
-│   ├── Abdruck 2/
-│   │   └── …
-│   ├── Stanzfehler/
-│   │   └── …
-│   └── i.O.-Teile/
-│       └── …
-└── annotations/
-    ├── Abdruck1_1.xml
-    ├── Abdruck2_1.xml
-    └── …
+└── raw/
+    ├── Abdruck 1/
+    │   ├── Abdruck1_1.jpg
+    │   └── …
+    ├── Abdruck 2/
+    │   └── …
+    ├── Stanzfehler/
+    │   └── …
+    └── i.O.-Teile/
+        └── …
 ```
 
-`DefectDataset` (in `src/dataset.py`) reads every image under `data/raw/<class>/` and assigns the label from the `CLASS_NAMES` index in `config.py`. The annotations folder is not read by the classifier — it is kept for potential future object-detection extensions.
-
----
-
-## Annotation XML Format (Pascal VOC)
-
-Each `.xml` file covers one image. The `<bndbox>` spans the full image since no region-level labelling was done.
-
-```xml
-<annotation>
-  <folder>Abdruck 1</folder>
-  <filename>Abdruck1_1.jpg</filename>
-  <source>
-    <database>Produktionsdaten</database>
-  </source>
-  <size>
-    <width>4032</width>
-    <height>3024</height>
-    <depth>3</depth>
-  </size>
-  <segmented>0</segmented>
-  <object>
-    <name>Abdruck 1</name>
-    <pose>Unspecified</pose>
-    <truncated>0</truncated>
-    <difficult>0</difficult>
-    <bndbox>
-      <xmin>0</xmin>
-      <ymin>0</ymin>
-      <xmax>4032</xmax>
-      <ymax>3024</ymax>
-    </bndbox>
-  </object>
-</annotation>
-```
+`DefectDataset` (in `src/dataset.py`) reads every image under `data/raw/<class>/` and assigns the label from the `CLASS_NAMES` index in `config.py` — the folder name is the label, no annotation files are needed for classification.
 
 ---
 

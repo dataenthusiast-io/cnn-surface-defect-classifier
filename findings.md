@@ -2,6 +2,8 @@
 
 Zusammenfassung aller Analyse-Ergebnisse (Stand: Juni 2026). Details zur ML-Methodik in [`analyse.md`](analyse.md).
 
+> **Update (Cleanup durchgeführt):** Die Punkte 2, 4 und 6 aus Abschnitt 2.2 sind behoben (`.detach()`-Fix; Grad-CAM-Bounding-Box komplett entfernt — Heatmap bleibt; Overlay-Alignment im Cockpit gefixt). Aus Abschnitt 3 wurden `data/annotations/` und `Daten.zip` gelöscht, `rename_and_annotate.py` wurde zu `rename_images.py` (ohne XML-Generierung), ungenutzte npm-Pakete und UI-Komponenten entfernt, tote Imports/Konstanten bereinigt. Offen bleiben v. a. Daten-Leakage (1), Split-Persistenz (3), Heatmap-Normalisierung (5), Konfidenz-Kalibrierung (7) sowie 8–10.
+
 ---
 
 ## 1. Was aktuell funktioniert ✅

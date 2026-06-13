@@ -68,7 +68,7 @@ class DefectDataset(Dataset):
         if len(self.samples) == 0:
             raise RuntimeError(
                 f"No images found in {root_dir}. "
-                "Run scripts/convert_heic_to_jpg.py and scripts/rename_and_annotate.py first."
+                "Run scripts/convert_heic_to_jpg.py and scripts/rename_images.py first."
             )
 
     def __len__(self) -> int:

@@ -18,7 +18,7 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader
 
-from config import DEVICE, CHECKPOINT_DIR, PLOT_DIR, CLASS_NAMES, BATCH_SIZE, NUM_WORKERS, LOG_PATH
+from config import DEVICE, CHECKPOINT_DIR, PLOT_DIR, CLASS_NAMES, LOG_PATH
 from src.dataset import get_dataloaders, get_test_dataset
 from src.model import build_model
 
